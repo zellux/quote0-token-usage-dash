@@ -1,6 +1,8 @@
 """
 Render a 296×152 black/white PNG image showing Claude + OpenAI Codex usage.
-Layout fills the full screen height, distributing space evenly across rows.
+
+Renders at 3× resolution (supersampling) then scales down to 1× before
+converting to 1-bit, giving smooth crisp text on the e-ink display.
 """
 
 from __future__ import annotations
@@ -12,34 +14,68 @@ from zoneinfo import ZoneInfo
 
 from PIL import Image, ImageDraw, ImageFont
 
+# Logical canvas size (matches e-ink display)
 W, H = 296, 152
-PAD = 6
+
+# Supersample scale: render at S× then scale down
+S = 3
 
 FONT_REGULAR = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 FONT_BOLD    = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 BLACK = 0
 WHITE = 255
+LA    = ZoneInfo("America/Los_Angeles")
 
-LA = ZoneInfo("America/Los_Angeles")
-
-LABEL_W  = 28   # fixed px reserved for row label ("5h", "7d", "Wk")
-NOTE_W   = 82   # fixed px reserved for right-side text ("79% · 3h26m")
+# Layout constants (logical pixels)
+PAD     = 6
+LABEL_W = 28
+NOTE_W  = 86
 
 
 def _font(path: str, size: int) -> ImageFont.FreeTypeFont:
-    return ImageFont.truetype(path, size)
+    """Load font at S× the logical size for supersampling."""
+    return ImageFont.truetype(path, size * S)
 
 
-def _text_w(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont) -> int:
-    return int(draw.textlength(text, font=font))
+def _lsize(font: ImageFont.FreeTypeFont) -> int:
+    """Logical font height (divide supersampled size back down)."""
+    return font.size // S
 
 
-def _draw_bar(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int, used_pct: float) -> None:
-    draw.rectangle([x, y, x + w - 1, y + h - 1], outline=BLACK, width=1)
+def _lw(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont) -> int:
+    """Logical text width."""
+    return int(draw.textlength(text, font=font)) // S
+
+
+def _p(v: int | float) -> int:
+    """Convert logical coordinate to supersampled canvas coordinate."""
+    return int(v * S)
+
+
+def _bar(draw: ImageDraw.ImageDraw, x: int, y: int, w: int, h: int, used_pct: float) -> None:
+    """Draw a progress bar at logical coordinates."""
+    draw.rectangle([_p(x), _p(y), _p(x + w) - 1, _p(y + h) - 1], outline=BLACK, width=S)
     filled = int((w - 2) * min(used_pct, 100) / 100)
     if filled > 0:
-        draw.rectangle([x + 1, y + 1, x + filled, y + h - 2], fill=BLACK)
+        draw.rectangle([_p(x) + S, _p(y) + S, _p(x) + S + _p(filled) - 1, _p(y + h) - S - 1], fill=BLACK)
+
+
+def _text(draw: ImageDraw.ImageDraw, pos: tuple[int, int], text: str,
+          font: ImageFont.FreeTypeFont) -> None:
+    """Draw text at logical coordinates."""
+    draw.text((_p(pos[0]), _p(pos[1])), text, font=font, fill=BLACK)
+
+
+def _hline(draw: ImageDraw.ImageDraw, y: int, x0: int = 0, x1: int = W, width: int = 1) -> None:
+    draw.line([(_p(x0), _p(y)), (_p(x1), _p(y))], fill=BLACK, width=width * S)
+
+
+def _dashed_hline(draw: ImageDraw.ImageDraw, y: int, dash: int = 6, gap: int = 4) -> None:
+    x = 0
+    while x < W:
+        draw.line([(_p(x), _p(y)), (_p(min(x + dash, W)) - 1, _p(y))], fill=BLACK, width=S)
+        x += dash + gap
 
 
 def _draw_row(
@@ -51,40 +87,38 @@ def _draw_row(
     note: Optional[str],
     fonts: dict,
 ) -> None:
-    """Draw one full-width metric row centered vertically within row_h."""
-    bar_h = max(10, row_h - 8)
+    """Draw one full-width metric row at logical coordinates."""
+    lbl_font  = fonts["label"]
+    note_font = fonts["note"]
+
+    bar_h = max(10, row_h - 6)
     bar_y = y + (row_h - bar_h) // 2
 
-    # Label — vertically centered
-    lbl_font = fonts["label"]
-    lbl_h = lbl_font.size
-    draw.text((PAD, bar_y + (bar_h - lbl_h) // 2), label, font=lbl_font, fill=BLACK)
+    lbl_h  = _lsize(lbl_font)
+    note_h = _lsize(note_font)
 
-    # Right-side note text — vertically centered
-    note_font = fonts["note"]
+    # Label
+    _text(draw, (PAD, bar_y + (bar_h - lbl_h) // 2), label, lbl_font)
+
+    # Right note
     remaining = 100.0 - used_pct
     note_text = f"{remaining:.0f}%"
     if note:
         note_text += f"  {note}"
-    note_h = note_font.size
-    draw.text(
-        (W - PAD - NOTE_W, bar_y + (bar_h - note_h) // 2),
-        note_text,
-        font=note_font,
-        fill=BLACK,
-    )
+    note_x = W - PAD - NOTE_W
+    _text(draw, (note_x, bar_y + (bar_h - note_h) // 2), note_text, note_font)
 
-    # Bar between label and note
+    # Bar
     bar_x = PAD + LABEL_W
-    bar_w = W - PAD - NOTE_W - 4 - bar_x
-    _draw_bar(draw, bar_x, bar_y, bar_w, bar_h, used_pct)
+    bar_w = note_x - 4 - bar_x
+    _bar(draw, bar_x, bar_y, bar_w, bar_h, used_pct)
 
 
 def render_image(
     claude_usage: Optional[dict],
     openai_usage=None,
 ) -> bytes:
-    img = Image.new("L", (W, H), WHITE)
+    img  = Image.new("L", (W * S, H * S), WHITE)
     draw = ImageDraw.Draw(img)
 
     fonts = {
@@ -100,16 +134,16 @@ def render_image(
     date_str = now.strftime("%b %-d")
     time_str = now.strftime("%-I:%M %p")
 
-    draw.text((PAD, PAD), "Token Usage", font=fonts["title"], fill=BLACK)
+    _text(draw, (PAD, PAD), "Token Usage", fonts["title"])
 
-    ts_w   = _text_w(draw, time_str, fonts["ts"])
-    date_w = _text_w(draw, date_str, fonts["ts"])
-    ts_y   = PAD + (fonts["title"].size - fonts["ts"].size) // 2
-    draw.text((W - PAD - ts_w,            ts_y), time_str, font=fonts["ts"], fill=BLACK)
-    draw.text((W - PAD - ts_w - 6 - date_w, ts_y), date_str, font=fonts["ts"], fill=BLACK)
+    ts_w   = _lw(draw, time_str, fonts["ts"])
+    date_w = _lw(draw, date_str, fonts["ts"])
+    ts_y   = PAD + (_lsize(fonts["title"]) - _lsize(fonts["ts"])) // 2
+    _text(draw, (W - PAD - ts_w, ts_y), time_str, fonts["ts"])
+    _text(draw, (W - PAD - ts_w - 6 - date_w, ts_y), date_str, fonts["ts"])
 
-    header_bottom = PAD + fonts["title"].size + 4
-    draw.line([(0, header_bottom), (W, header_bottom)], fill=BLACK, width=1)
+    header_bottom = PAD + _lsize(fonts["title"]) + 4
+    _hline(draw, header_bottom)
 
     # ── Collect rows ──────────────────────────────────────────────────────
     from display import format_time_until, format_time_until_iso
@@ -137,26 +171,24 @@ def render_image(
             openai_rows.append(("Wk", w.used_percent,
                                  format_time_until(w.resets_at) if w.resets_at else None))
 
-    # ── Layout calculation ─────────────────────────────────────────────────
-    # Fixed heights
-    SECTION_H  = fonts["section"].size + 5   # section label row
-    DIVIDER_H  = 8                            # dashed line + gaps
-    SOLID_H    = 1
+    # ── Layout ────────────────────────────────────────────────────────────
+    SECTION_H = _lsize(fonts["section"]) + 5
+    DIVIDER_H = 8
 
-    n_claude  = len(claude_rows)
-    n_openai  = len(openai_rows)
-    n_sections = (1 if n_claude else 0) + (1 if n_openai else 0)
-    n_rows    = n_claude + n_openai
-    has_both  = n_claude > 0 and n_openai > 0
+    n_claude = len(claude_rows)
+    n_openai = len(openai_rows)
+    n_rows   = n_claude + n_openai
+    has_both = n_claude > 0 and n_openai > 0
 
-    content_h = H - header_bottom - SOLID_H - 1
-    fixed_h   = n_sections * SECTION_H + (DIVIDER_H if has_both else 0)
+    content_h = H - header_bottom - 2
+    fixed_h   = ((1 if n_claude else 0) + (1 if n_openai else 0)) * SECTION_H
+    fixed_h  += DIVIDER_H if has_both else 0
     row_h     = (content_h - fixed_h) // n_rows if n_rows else content_h
 
-    # ── Draw Claude ───────────────────────────────────────────────────────
+    # ── Claude ────────────────────────────────────────────────────────────
     y = header_bottom + 2
     if claude_rows:
-        draw.text((PAD, y), "Claude", font=fonts["section"], fill=BLACK)
+        _text(draw, (PAD, y), "Claude", fonts["section"])
         y += SECTION_H
         for label, used_pct, note in claude_rows:
             _draw_row(draw, y, row_h, label, used_pct, note, fonts)
@@ -164,26 +196,27 @@ def render_image(
 
     # ── Dashed divider ────────────────────────────────────────────────────
     if has_both:
-        y += (DIVIDER_H - 1) // 2
-        dash, gap, x = 6, 4, 0
-        while x < W:
-            draw.line([(x, y), (min(x + dash - 1, W), y)], fill=BLACK, width=1)
-            x += dash + gap
-        y += (DIVIDER_H - 1) // 2 + 1
+        y += DIVIDER_H // 2
+        _dashed_hline(draw, y)
+        y += DIVIDER_H // 2
 
-    # ── Draw OpenAI ───────────────────────────────────────────────────────
+    # ── OpenAI ────────────────────────────────────────────────────────────
     if openai_rows:
         label = "OpenAI Codex"
         if openai_usage and openai_usage.credits_remaining is not None:
             label += f"  ({openai_usage.credits_remaining:.0f} cr)"
-        draw.text((PAD, y), label, font=fonts["section"], fill=BLACK)
+        _text(draw, (PAD, y), label, fonts["section"])
         y += SECTION_H
         for row_label, used_pct, note in openai_rows:
             _draw_row(draw, y, row_h, row_label, used_pct, note, fonts)
             y += row_h
 
+    # ── Scale down and convert to 1-bit ───────────────────────────────────
+    img = img.resize((W, H), Image.LANCZOS)
+    img = img.convert("1")
+
     buf = io.BytesIO()
-    img.convert("1").save(buf, format="PNG")
+    img.save(buf, format="PNG")
     return buf.getvalue()
 
 
