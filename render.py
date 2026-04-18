@@ -177,10 +177,13 @@ def render_image(
     content_h = H - header_bottom - 2
     fixed_h   = ((1 if n_claude else 0) + (1 if n_openai else 0)) * SECTION_H
     fixed_h  += DIVIDER_H if has_both else 0
-    row_h     = (content_h - fixed_h) // n_rows if n_rows else content_h
+    row_h     = min((content_h - fixed_h) // n_rows, 28) if n_rows else content_h
 
+    # Vertically center the content block when it doesn't fill the space
+    total_h   = fixed_h + row_h * n_rows
+    y_offset  = (content_h - total_h) // 2
     # ── Claude ────────────────────────────────────────────────────────────
-    y = header_bottom + 2
+    y = header_bottom + 2 + y_offset
     if claude_rows:
         draw.text((PAD, y), "Claude", font=fonts["section"], fill=BLACK)
         y += SECTION_H
