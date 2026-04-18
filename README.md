@@ -15,7 +15,6 @@ Pushes Claude and OpenAI Codex subscription plan usage to a [dot.mindreset.tech]
 
 ```bash
 uv sync
-playwright install chromium
 ```
 
 ### 2. Configure
@@ -30,7 +29,7 @@ Edit `.env` with your credentials:
 |-----|-------------|
 | `QUOTE_API_KEY` | Bearer token from dot.mindreset.tech |
 | `QUOTE_DEVICE_ID` | Device serial number |
-| `OPENAI_ENABLED` | Set to `false` to skip OpenAI scraping (default: `true`) |
+| `OPENAI_ENABLED` | Set to `false` to skip OpenAI fetching (default: `true`) |
 | `UPDATE_INTERVAL` | Seconds between updates in loop mode (default: `1800`) |
 
 ### 3. Claude auth
@@ -39,16 +38,7 @@ Claude credentials are read automatically from `~/.claude/.credentials.json` (cr
 
 ### 4. OpenAI Codex auth
 
-OpenAI has no public usage API — the script scrapes `chatgpt.com/codex/cloud/settings/analytics` using your browser session cookies. To set them up:
-
-1. Log into [chatgpt.com](https://chatgpt.com) in your browser
-2. Open DevTools → Network → click any request → copy the `Cookie:` header value
-3. Save it:
-   ```bash
-   uv run usage.py --save-openai-cookies "paste-cookie-header-here"
-   ```
-
-Cookies are saved to `~/.config/token-usage-dash/openai-cookies.json` and will need refreshing every few days when they expire.
+Codex credentials are read automatically from `~/.codex/auth.json` (created when you authenticate with [Codex](https://github.com/openai/codex)). Run `codex` once to log in.
 
 ### 5. Add Image API content in Content Studio
 
