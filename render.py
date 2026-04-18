@@ -12,13 +12,16 @@ from datetime import datetime
 from typing import Optional
 from zoneinfo import ZoneInfo
 
+from pathlib import Path
+
 from PIL import Image, ImageDraw, ImageFont
 
 W, H = 296, 152
 PAD  = 6
 
-FONT_REGULAR = "/usr/share/fonts/opentype/terminus/terminus-normal.otb"
-FONT_BOLD    = "/usr/share/fonts/opentype/terminus/terminus-bold.otb"
+_HERE        = Path(__file__).parent
+FONT_REGULAR = str(_HERE / "fonts" / "terminus-normal.otb")
+FONT_BOLD    = str(_HERE / "fonts" / "terminus-bold.otb")
 
 BLACK = 0
 WHITE = 255

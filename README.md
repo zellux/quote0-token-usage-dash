@@ -14,7 +14,7 @@ Pushes Claude and OpenAI Codex subscription plan usage to a [dot.mindreset.tech]
 ### 1. Install dependencies
 
 ```bash
-uv pip install pillow playwright requests python-dotenv browser-cookie3
+uv sync
 playwright install chromium
 ```
 
