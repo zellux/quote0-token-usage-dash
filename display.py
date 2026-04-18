@@ -70,6 +70,7 @@ def push_image(png_bytes: bytes) -> None:
         "refreshNow": True,
         "image": base64.b64encode(png_bytes).decode(),
         "ditherType": "NONE",
+
     }
     resp = requests.post(
         url,
