@@ -4,10 +4,12 @@ Fetch subscription plan usage for Claude and OpenAI Codex.
 
 Claude: uses OAuth token from ~/.claude/.credentials.json
 OpenAI Codex: uses OAuth token from ~/.codex/auth.json
+              or CODEX_ACCESS_TOKEN env var / .env file
               endpoint: https://chatgpt.com/backend-api/wham/usage
 """
 
 import json
+import os
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -15,6 +17,9 @@ from pathlib import Path
 from typing import Optional
 
 import requests
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Claude
@@ -112,22 +117,27 @@ class OpenAIUsage:
     account_plan: Optional[str] = None
 
 
-def _load_codex_auth() -> dict:
+def _load_codex_token() -> tuple[str, str]:
+    """Return (access_token, account_id). .env / env var takes priority."""
+    env_token = os.environ.get("CODEX_ACCESS_TOKEN", "").strip()
+    if env_token:
+        account_id = os.environ.get("CODEX_ACCOUNT_ID", "").strip()
+        return env_token, account_id
+
     if not CODEX_AUTH_PATH.exists():
         raise FileNotFoundError(
             f"No Codex credentials found at {CODEX_AUTH_PATH}. "
-            "Run `codex` to authenticate first."
+            "Run `codex` to authenticate first, or set CODEX_ACCESS_TOKEN in .env."
         )
     with open(CODEX_AUTH_PATH) as f:
-        return json.load(f)
+        auth = json.load(f)
+    tokens = auth["tokens"]
+    return tokens["access_token"], tokens.get("account_id", "")
 
 
 def get_openai_usage() -> OpenAIUsage:
     """Fetch OpenAI Codex plan usage via the OAuth API."""
-    auth = _load_codex_auth()
-    tokens = auth["tokens"]
-    access_token = tokens["access_token"]
-    account_id   = tokens.get("account_id", "")
+    access_token, account_id = _load_codex_token()
 
     headers = {
         "Authorization": f"Bearer {access_token}",

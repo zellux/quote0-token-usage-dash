@@ -31,6 +31,8 @@ Edit `.env` with your credentials:
 | `QUOTE_DEVICE_ID` | Device serial number |
 | `OPENAI_ENABLED` | Set to `false` to skip OpenAI fetching (default: `true`) |
 | `UPDATE_INTERVAL` | Seconds between updates in loop mode (default: `1800`) |
+| `CODEX_ACCESS_TOKEN` | Override Codex OAuth token (optional; default: read from `~/.codex/auth.json`) |
+| `CODEX_ACCOUNT_ID` | Override Codex account ID (optional) |
 
 ### 3. Claude auth
 
@@ -39,6 +41,8 @@ Claude credentials are read automatically from `~/.claude/.credentials.json` (cr
 ### 4. OpenAI Codex auth
 
 Codex credentials are read automatically from `~/.codex/auth.json` (created when you authenticate with [Codex](https://github.com/openai/codex)). Run `codex` once to log in.
+
+Alternatively, set `CODEX_ACCESS_TOKEN` in `.env` to supply the token directly.
 
 ### 5. Add Image API content in Content Studio
 
