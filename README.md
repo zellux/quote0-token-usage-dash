@@ -14,8 +14,6 @@ Pushes Claude and OpenAI Codex subscription plan usage to a [dot.mindreset.tech]
 ### 1. Install dependencies
 
 ```bash
-uv venv .venv
-source .venv/bin/activate
 uv pip install pillow playwright requests python-dotenv browser-cookie3
 playwright install chromium
 ```
@@ -47,7 +45,7 @@ OpenAI has no public usage API — the script scrapes `chatgpt.com/codex/cloud/s
 2. Open DevTools → Network → click any request → copy the `Cookie:` header value
 3. Save it:
    ```bash
-   python3 usage.py --save-openai-cookies "paste-cookie-header-here"
+   uv run usage.py --save-openai-cookies "paste-cookie-header-here"
    ```
 
 Cookies are saved to `~/.config/token-usage-dash/openai-cookies.json` and will need refreshing every few days when they expire.
@@ -59,24 +57,22 @@ In the dot.mindreset.tech app, add an **Image API** content slot to your device.
 ## Usage
 
 ```bash
-source .venv/bin/activate
-
 # One-shot update
-python3 display.py
+uv run display.py
 
 # Loop every 30 minutes
-python3 display.py --loop
+uv run display.py --loop
 
 # Loop with custom interval and save preview PNG
-python3 display.py --loop --interval 900 --preview
+uv run display.py --loop --interval 900 --preview
 
 # Preview image without pushing to device
-python3 render.py   # saves to /tmp/usage_preview.png
+uv run render.py   # saves to /tmp/usage_preview.png
 
 # Print usage to terminal only
-python3 usage.py
-python3 usage.py --claude-only
-python3 usage.py --openai-only
+uv run usage.py
+uv run usage.py --claude-only
+uv run usage.py --openai-only
 ```
 
 ## Files
